@@ -2,6 +2,7 @@
 output
 instant_test_output
 inference_test_output
+test_dir/
 
 
 *.jpg
@@ -49,6 +50,7 @@ dist/
 /weights
 /export
 eval.sh
+training_dir/
 
 demo/performance.py
 demo/demo2.py

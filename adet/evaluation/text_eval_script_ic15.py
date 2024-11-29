@@ -8,7 +8,7 @@ import sys
 
 import math 
 
-from rapidfuzz import string_metric
+from rapidfuzz import distance
 
 WORD_SPOTTING =True
 def evaluation_imports():

@@ -22,7 +22,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel
 
 import detectron2.utils.comm as comm
-from detectron2.data import MetadataCatalog, build_detection_train_loader
+from detectron2.data import DatasetCatalog, MetadataCatalog, build_detection_train_loader
 from detectron2.engine import DefaultTrainer, default_argument_parser, default_setup, hooks, launch
 from detectron2.utils.events import EventStorage
 from detectron2.evaluation import (
@@ -42,6 +42,11 @@ from adet.data.fcpose_dataset_mapper import FCPoseDatasetMapper
 from adet.config import get_cfg
 from adet.checkpoint import AdetCheckpointer
 from adet.evaluation import TextEvaluator
+
+import random
+import json
+from tqdm import tqdm
+from detectron2.structures import BoxMode
 
 
 class Trainer(DefaultTrainer):
@@ -116,7 +121,7 @@ class Trainer(DefaultTrainer):
         if cfg.MODEL.FCPOSE_ON:
             mapper = FCPoseDatasetMapper(cfg, True)
         else:
-            mapper = DatasetMapperWithBasis(cfg, True)
+            mapper = DatasetMapperWithBasis(cfg, True, image_format="BGR")
         return build_detection_train_loader(cfg, mapper=mapper)
 
     @classmethod
@@ -185,6 +190,41 @@ def setup(args):
     """
     cfg = get_cfg()
     cfg.merge_from_file(args.config_file)
+    # Check https://github.com/AugP-creatis/detectron2-Z/blob/main/detectron2/config/defaults.py
+
+    # DATASETS
+    cfg.DATASETS.TRAIN = ("train",)
+    cfg.DATASETS.VAL = ("val",)
+    cfg.DATASETS.TEST = ()
+
+    # INPUT
+    #cfg.INPUT.FORMAT = "BGR"
+    #cfg.INPUT.MASK_FORMAT = "polygon"
+    #cfg.INPUT.MIN_SIZE_TRAIN = (800,)
+    #cfg.INPUT.MAX_SIZE_TRAIN = 1333
+    #cfg.INPUT.MIN_SIZE_TEST = 800
+    #cfg.INPUT.MAX_SIZE_TEST = 1333
+
+    # DATALOADER
+    cfg.DATALOADER.NUM_WORKERS = 2  #As recommended
+
+    # MODEL
+    cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    cfg.MODEL.WEIGHTS = ""
+    cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
+    #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
+    '''
+    cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
+    cfg.MODEL.PIXEL_STD = [20.1397195,  19.81115748, 21.38672478]
+    '''
+
+    # SOLVER
+    cfg.SOLVER.IMS_PER_BATCH = 32
+    cfg.SOLVER.MAX_ITER = 3000
+    cfg.SOLVER.CHECKPOINT_PERIOD = 500
+    # cfg.SOLVER.BASE_LR = 0.001
+    # cfg.SOLVER.REFERENCE_WORLD_SIZE = 0
+    
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     default_setup(cfg, args)
@@ -195,8 +235,125 @@ def setup(args):
     return cfg
 
 
+# get_dicts and register_datasets from Nathan Hutin https://gitlab.in2p3.fr/nathan.hutin/detectron2/-/blob/main/train_cross_validation.py
+# inspired from official Detectron2 tutorial notebook https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5
+
+def get_dicts(dir, mode, idx_cross_val, classes):
+    """
+    Read the annotations for the dataset in YOLO format and create a list of dictionaries containing information for each
+    image.
+
+    Args:
+        img_dir (str): Directory containing the images.
+        ann_dir (str): Directory containing the annotations.
+
+    Returns:
+        list[dict]: A list of dictionaries containing information for each image. Each dictionary has the following keys:
+            - file_name: The path to the image file.
+            - image_id: The unique identifier for the image.
+            - height: The height of the image in pixels.
+            - width: The width of the image in pixels.
+            - annotations: A list of dictionaries, one for each object in the image, containing the following keys:
+                - bbox: A list of four integers [x0, y0, w, h] representing the bounding box of the object in the image,
+                        where (x0, y0) is the top-left corner and (w, h) are the width and height of the bounding box,
+                        respectively.
+                - bbox_mode: A constant from the `BoxMode` class indicating the format of the bounding box coordinates
+                             (e.g., `BoxMode.XYWH_ABS` for absolute coordinates in the format [x0, y0, w, h]).
+                - category_id: The integer ID of the object's class.
+    """
+    random.seed(0)
+    if mode == 'train':
+        cross_val_dict = {0:[2,3,4], 1:[0,3,4], 2:[0,1,4], 3:[0,1,2], 4:[1,2,3]}
+        folds_list = cross_val_dict[idx_cross_val]
+
+    elif mode == 'val' :
+        cross_val_dict = {0:[1], 1:[2], 2:[3], 3:[4], 4:[0]}
+        folds_list = cross_val_dict[idx_cross_val]
+    
+    else:
+        cross_val_dict = {0:[0], 1:[1], 2:[2], 3:[3], 4:[4]}
+        folds_list = cross_val_dict[idx_cross_val]
+
+    dataset_dicts = []
+    lenght_image_id_0 = 0
+    dict_instance_label = {value:num for num, value in enumerate(classes.values())}
+    list_image_non_id_0 = []
+    for fold in folds_list:
+        img_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_images', 'images')
+        ann_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_labels','detectron2')
+    
+
+        for idx, file in tqdm(enumerate(os.listdir(ann_dir)), desc=f'cross validation {fold}, mode {mode}'):
+            change_file_id_0 = False
+            change_file_id_no_0 = False
+            # annotations should be provided in yolo format
+            if mode !='train' and 'Augmented' in file:
+                continue
+
+            record = {}
+            dico = json.load(open(os.path.join(ann_dir, file)))
+
+            record["file_name"] = os.path.join(img_dir, dico['info']['filename'])
+            record["image_id"] = dico['info']['image_id']
+            record["height"] = dico['info']['height']
+            record["width"] = dico['info']['width']
+
+            objs = []
+            if len(dico['annotation']) == 0:
+                continue
+            for instance in dico['annotation']:
+                if 'Trash' in classes.keys() and instance['category_id'] in classes['Trash']:
+                    instance['category_id'] = 1
+                if instance['category_id'] == 0 and change_file_id_0 == False:
+                    lenght_image_id_0 += 1
+                    change_file_id_0 = True
+                if instance['category_id'] != 0 and change_file_id_no_0 == False:
+                    change_file_id_no_0 = True
+
+
+                if instance['category_id'] in classes.values() or ('trash' in classes.keys() and instance['category_id'] in classes['trash']):
+
+                    obj = {
+                        "bbox": instance['bbox'],
+                        "bbox_mode": BoxMode.XYXY_ABS,
+                        "category_id": dict_instance_label[instance['category_id']],
+                        'segmentation' : instance['segmentation']
+                    }
+
+                    objs.append(obj)
+
+            if change_file_id_0 == False and change_file_id_no_0 == True:
+                list_image_non_id_0.append(record["file_name"])
+
+            if len(objs) == 0:
+                continue
+            record["annotations"] = objs
+            dataset_dicts.append(record)
+
+    random.shuffle(list_image_non_id_0)
+    try:
+        image_remove = random.sample(list_image_non_id_0, lenght_image_id_0*2)
+    except ValueError:
+        image_remove =[]
+    for img_rm in image_remove:
+        for record in dataset_dicts:
+            if record['file_name'] == img_rm:
+                dataset_dicts.remove(record)
+                break
+
+    return dataset_dicts
+
+
 def main(args):
     cfg = setup(args)
+
+    classes = eval(args.classes_dict)
+    # Register the train and validation datasets.
+    DatasetCatalog.register('train', lambda: get_dicts(args.data_dir, 'train', args.cross_val, classes))
+    DatasetCatalog.register('val', lambda: get_dicts(args.data_dir, 'val', args.cross_val, classes))
+    # Set the metadata for the dataset.
+    MetadataCatalog.get('train').set(thing_classes=list(classes.keys()))
+    MetadataCatalog.get('val').set(thing_classes=list(classes.keys()))
 
     if args.eval_only:
         model = Trainer.build_model(cfg)
@@ -224,7 +381,14 @@ def main(args):
 
 
 if __name__ == "__main__":
-    args = default_argument_parser().parse_args()
+    parser = default_argument_parser()
+
+    parser.add_argument('--data-dir', default='/home/perrier/Bacteriocytes_seg/data')
+    parser.add_argument('--classes-dict',type=str,default="{'Intact_Sharp':0, 'Broken_Sharp':2}")
+    #Classes are like "{'Intact_Sharp':0,'Intact_Blurry':1,'Broken_Sharp':2,'Broken_Blurry':3}"
+    parser.add_argument('--cross-val', default=4)
+
+    args = parser.parse_args()
     print("Command Line Args:", args)
     launch(
         main,

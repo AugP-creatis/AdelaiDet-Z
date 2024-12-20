@@ -31,6 +31,12 @@ def setup_cfg(args):
     cfg.DATASETS.TEST = ('test',)
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
 
+    #Remove all online augmentations
+    cfg.INPUT.HFLIP_TRAIN = False
+    cfg.CROP.ENABLED = False
+    cfg.INPUT.IS_ROTATE = False
+    cfg.TEST.AUG.ENABLED = False
+
     # Set score_threshold for builtin models
     cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
@@ -80,7 +86,7 @@ def get_parser():
 # get_dicts from Nathan Hutin https://gitlab.in2p3.fr/nathan.hutin/detectron2/-/blob/main/train_cross_validation.py
 # inspired from official Detectron2 tutorial notebook https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5
 
-def get_dicts(dir,mode, idx_cross_val, classes):
+def get_dicts(dir, mode, idx_cross_val, classes):
     """
     Read the annotations for the dataset in YOLO format and create a list of dictionaries containing information for each
     image.
@@ -117,17 +123,13 @@ def get_dicts(dir,mode, idx_cross_val, classes):
         folds_list = cross_val_dict[idx_cross_val]
 
     dataset_dicts = []
-    lenght_image_id_0 = 0
     dict_instance_label = {value:num for num, value in enumerate(classes.values())}
-    list_image_non_id_0 = []
     for fold in folds_list:
         img_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_images', 'images')
         ann_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_labels','detectron2')
     
 
         for idx, file in tqdm(enumerate(os.listdir(ann_dir)), desc=f'cross validation {fold}, mode {mode}'):
-            change_file_id_0 = False
-            change_file_id_no_0 = False
             # annotations should be provided in yolo format
             if mode !='train' and 'Augmented' in file:
                 continue
@@ -141,17 +143,9 @@ def get_dicts(dir,mode, idx_cross_val, classes):
             record["width"] = dico['info']['width']
 
             objs = []
-            if len(dico['annotation']) == 0:
-                continue
             for instance in dico['annotation']:
                 if 'Trash' in classes.keys() and instance['category_id'] in classes['Trash']:
                     instance['category_id'] = 1
-                if instance['category_id'] == 0 and change_file_id_0 == False:
-                    lenght_image_id_0 += 1
-                    change_file_id_0 = True
-                if instance['category_id'] != 0 and change_file_id_no_0 == False:
-                    change_file_id_no_0 = True
-
 
                 if instance['category_id'] in classes.values() or ('trash' in classes.keys() and instance['category_id'] in classes['trash']):
 
@@ -164,24 +158,9 @@ def get_dicts(dir,mode, idx_cross_val, classes):
 
                     objs.append(obj)
 
-            if change_file_id_0 == False and change_file_id_no_0 == True:
-                list_image_non_id_0.append(record["file_name"])
-
-            if len(objs) == 0:
-                continue
             record["annotations"] = objs
             dataset_dicts.append(record)
 
-    random.shuffle(list_image_non_id_0)
-    try:
-        image_remove = random.sample(list_image_non_id_0, lenght_image_id_0*2)
-    except ValueError:
-        image_remove =[]
-    for img_rm in image_remove:
-        for record in dataset_dicts:
-            if record['file_name'] == img_rm:
-                dataset_dicts.remove(record)
-                break
 
     return dataset_dicts
 

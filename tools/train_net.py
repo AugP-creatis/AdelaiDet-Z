@@ -200,15 +200,24 @@ def setup(args):
     # INPUT
     #cfg.INPUT.FORMAT = "BGR"
     #cfg.INPUT.MASK_FORMAT = "polygon"
-    #cfg.INPUT.MIN_SIZE_TRAIN = (800,)
+    cfg.INPUT.MIN_SIZE_TRAIN = (800,)
     #cfg.INPUT.MAX_SIZE_TRAIN = 1333
     #cfg.INPUT.MIN_SIZE_TEST = 800
     #cfg.INPUT.MAX_SIZE_TEST = 1333
 
+    # STACK
+    #cfg.DATALOADER.STACK = True
+    #cfg.INPUT.STACK_SIZE = 11
+    #cfg.INPUT.EXTENSION = ".png"
+    #cfg.INPUT.STACK_SEPERATOR = "F"
+
     # DATALOADER
-    cfg.DATALOADER.NUM_WORKERS = 2  #As recommended
+    cfg.DATALOADER.NUM_WORKERS = 1  #max 2 recommended
+    cfg.DATALOADER.ASPECT_RATIO_GROUPING = False
+    cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False
 
     # MODEL
+    cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
     cfg.MODEL.BACKBONE.FREEZE_AT = 0
     cfg.MODEL.WEIGHTS = ""
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
@@ -219,12 +228,18 @@ def setup(args):
     '''
 
     # SOLVER
-    cfg.SOLVER.IMS_PER_BATCH = 32
+    cfg.SOLVER.IMS_PER_BATCH = 8
     cfg.SOLVER.MAX_ITER = 3000
     cfg.SOLVER.CHECKPOINT_PERIOD = 500
-    # cfg.SOLVER.BASE_LR = 0.001
+    cfg.SOLVER.BASE_LR = 0.001
     # cfg.SOLVER.REFERENCE_WORLD_SIZE = 0
-    
+
+    #Remove all online augmentations
+    cfg.INPUT.HFLIP_TRAIN = False
+    cfg.INPUT.CROP.ENABLED = False
+    cfg.INPUT.IS_ROTATE = False
+    cfg.TEST.AUG.ENABLED = False
+
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     default_setup(cfg, args)
@@ -275,17 +290,13 @@ def get_dicts(dir, mode, idx_cross_val, classes):
         folds_list = cross_val_dict[idx_cross_val]
 
     dataset_dicts = []
-    lenght_image_id_0 = 0
     dict_instance_label = {value:num for num, value in enumerate(classes.values())}
-    list_image_non_id_0 = []
     for fold in folds_list:
         img_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_images', 'images')
         ann_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_labels','detectron2')
     
 
         for idx, file in tqdm(enumerate(os.listdir(ann_dir)), desc=f'cross validation {fold}, mode {mode}'):
-            change_file_id_0 = False
-            change_file_id_no_0 = False
             # annotations should be provided in yolo format
             if mode !='train' and 'Augmented' in file:
                 continue
@@ -299,17 +310,9 @@ def get_dicts(dir, mode, idx_cross_val, classes):
             record["width"] = dico['info']['width']
 
             objs = []
-            if len(dico['annotation']) == 0:
-                continue
             for instance in dico['annotation']:
                 if 'Trash' in classes.keys() and instance['category_id'] in classes['Trash']:
                     instance['category_id'] = 1
-                if instance['category_id'] == 0 and change_file_id_0 == False:
-                    lenght_image_id_0 += 1
-                    change_file_id_0 = True
-                if instance['category_id'] != 0 and change_file_id_no_0 == False:
-                    change_file_id_no_0 = True
-
 
                 if instance['category_id'] in classes.values() or ('trash' in classes.keys() and instance['category_id'] in classes['trash']):
 
@@ -322,24 +325,9 @@ def get_dicts(dir, mode, idx_cross_val, classes):
 
                     objs.append(obj)
 
-            if change_file_id_0 == False and change_file_id_no_0 == True:
-                list_image_non_id_0.append(record["file_name"])
-
-            if len(objs) == 0:
-                continue
             record["annotations"] = objs
             dataset_dicts.append(record)
 
-    random.shuffle(list_image_non_id_0)
-    try:
-        image_remove = random.sample(list_image_non_id_0, lenght_image_id_0*2)
-    except ValueError:
-        image_remove =[]
-    for img_rm in image_remove:
-        for record in dataset_dicts:
-            if record['file_name'] == img_rm:
-                dataset_dicts.remove(record)
-                break
 
     return dataset_dicts
 

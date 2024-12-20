@@ -94,6 +94,7 @@ def build_dynamic_mask_head(cfg):
 class DynamicMaskHead(nn.Module):
     def __init__(self, cfg):
         super(DynamicMaskHead, self).__init__()
+        self.device = torch.device(cfg.MODEL.DEVICE)
         self.num_layers = cfg.MODEL.CONDINST.MASK_HEAD.NUM_LAYERS
         self.channels = cfg.MODEL.CONDINST.MASK_HEAD.CHANNELS
         self.in_channels = cfg.MODEL.CONDINST.MASK_BRANCH.OUT_CHANNELS
@@ -202,7 +203,15 @@ class DynamicMaskHead(nn.Module):
             self._iter += 1
 
             gt_inds = pred_instances.gt_inds
-            gt_bitmasks = torch.cat([per_im.gt_bitmasks for per_im in gt_instances])
+
+            gt_bitmasks_lst = []
+            for per_im in gt_instances:
+                if per_im.has('gt_bitmasks'):
+                    gt_bitmasks_lst.append(per_im.gt_bitmasks)
+                else:
+                    gt_bitmasks_lst.append(torch.empty(0).to(self.device))
+
+            gt_bitmasks = torch.cat(gt_bitmasks_lst)
             gt_bitmasks = gt_bitmasks[gt_inds].unsqueeze(dim=1).to(dtype=mask_feats.dtype)
 
             losses = {}

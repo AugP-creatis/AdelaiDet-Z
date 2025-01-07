@@ -47,7 +47,7 @@ class CondInst_Z(CondInst):
 
         if "instances" in batched_inputs[0][0]:
             stack_gt_instances = [None] * nb_stacks
-            z_gt_instances = [[None] * nb_stacks] * self._stack_size
+            z_gt_instances = [[None] * nb_stacks for z in range(self._stack_size)]
 
             for s in range(nb_stacks):
                 stack_gt_instances[s] = [x["instances"].to(self.device) for x in batched_inputs[s]]
@@ -77,10 +77,11 @@ class CondInst_Z(CondInst):
 
                 for z in range(self._stack_size):
                     z_gt_instances[z][s] = stack_gt_instances[s][z]
+
         else:
             stack_gt_instances = [None] * nb_stacks
             z_gt_instances = [None] * self._stack_size
-                
+        
         
         z_features = self.seperator(features)
 
@@ -97,11 +98,16 @@ class CondInst_Z(CondInst):
 
                 mask_losses = self._forward_mask_heads_train(proposals, mask_feats, z_gt_instances[z])
                 
-                for l in sem_losses.copy():
+                sem_losses_keys = list(sem_losses.keys()).copy()
+                for l in sem_losses_keys:
                     sem_losses["{}_{}".format(z, l)] = sem_losses.pop(l)
-                for l in proposal_losses.copy():
+
+                proposal_losses_keys = list(proposal_losses.keys()).copy()
+                for l in proposal_losses_keys:
                     proposal_losses["{}_{}".format(z, l)] = proposal_losses.pop(l)
-                for l in mask_losses.copy():
+
+                mask_losses_keys = list(mask_losses.keys()).copy()
+                for l in mask_losses_keys:
                     mask_losses["{}_{}".format(z, l)] = mask_losses.pop(l)
                 
                 losses.update(sem_losses)

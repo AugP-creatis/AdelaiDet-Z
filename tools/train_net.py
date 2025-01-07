@@ -206,7 +206,7 @@ def setup(args):
     #cfg.INPUT.MAX_SIZE_TEST = 1333
 
     # STACK
-    #cfg.DATALOADER.STACK = True
+    cfg.DATALOADER.STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
     #cfg.INPUT.STACK_SEPERATOR = "F"
@@ -229,8 +229,8 @@ def setup(args):
 
     # SOLVER
     cfg.SOLVER.IMS_PER_BATCH = 8
-    cfg.SOLVER.MAX_ITER = 3000
-    cfg.SOLVER.CHECKPOINT_PERIOD = 500
+    cfg.SOLVER.MAX_ITER = 10000
+    cfg.SOLVER.CHECKPOINT_PERIOD = 1000
     cfg.SOLVER.BASE_LR = 0.001
     # cfg.SOLVER.REFERENCE_WORLD_SIZE = 0
 

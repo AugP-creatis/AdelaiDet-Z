@@ -93,7 +93,7 @@ class CondInst_Z(CondInst):
                 mask_feats, sem_losses = self.mask_branch(z_features[z], z_gt_instances[z])
 
                 proposals, proposal_losses = self.proposal_generator(
-                    concat_stacks, z_features[z], z_gt_instances[z], self.controller
+                    stacks_norm, z_features[z], z_gt_instances[z], self.controller
                 )
 
                 mask_losses = self._forward_mask_heads_train(proposals, mask_feats, z_gt_instances[z])
@@ -117,21 +117,23 @@ class CondInst_Z(CondInst):
             return losses
                 
         else:
+            processed_results = [[None] * self._stack_size for s in range(nb_stacks)]
+                
             for z in range(self._stack_size):
 
                 mask_feats, sem_losses = self.mask_branch(z_features[z], z_gt_instances[z])
 
                 proposals, proposal_losses = self.proposal_generator(
-                    concat_stacks, z_features[z], z_gt_instances[z], self.controller
+                    stacks_norm, z_features[z], z_gt_instances[z], self.controller
                 )
 
                 pred_instances_w_masks = self._forward_mask_heads_test(proposals, mask_feats)
 
                 padded_im_h, padded_im_w = stacks_norm.tensor.size()[-2:]
-                processed_results = []
-                for im_id, (input_per_image, image_size) in enumerate(zip(batched_inputs, stacks_norm.image_sizes)):
-                    height = input_per_image.get("height", image_size[0])
-                    width = input_per_image.get("width", image_size[1])
+
+                for im_id, (input_per_stack, image_size) in enumerate(zip(batched_inputs, stacks_norm.image_sizes)):
+                    height = input_per_stack[z].get("height", image_size[0])
+                    width = input_per_stack[z].get("width", image_size[1])
 
                     instances_per_im = pred_instances_w_masks[pred_instances_w_masks.im_inds == im_id]
                     instances_per_im = self.postprocess(
@@ -139,8 +141,6 @@ class CondInst_Z(CondInst):
                         padded_im_h, padded_im_w
                     )
 
-                    processed_results.append({
-                        "instances": instances_per_im
-                    })
+                    processed_results[im_id][z] = {"instances": instances_per_im}
 
             return processed_results

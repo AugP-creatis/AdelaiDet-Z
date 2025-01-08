@@ -30,13 +30,14 @@ class VisualizationDemo(object):
         )
         self.cfg = cfg
         self.cpu_device = torch.device("cpu")
+        self._is_stack = cfg.DATALOADER.IS_STACK
         self.instance_mode = instance_mode
         self.vis_text = cfg.MODEL.ROI_HEADS.NAME == "TextHead"
 
         self.parallel = parallel
         if parallel:
             num_gpu = torch.cuda.device_count()
-            self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)
+            self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)  #Not modified yet for stack
         else:
             self.predictor = DefaultPredictor(cfg)
 
@@ -75,6 +76,53 @@ class VisualizationDemo(object):
                 vis_output = visualizer.draw_instance_predictions(predictions=instances)
 
         return predictions, vis_output
+    
+
+    def run_on_stack(self, stack):
+        """
+        Args:
+            stack (list[np.ndarray]): a stack of images of shape (H, W, C) (in BGR order).
+                This is the format used by OpenCV.
+
+        Returns:
+            predictions (list[dict]): the output of the model.
+            vis_output (list[VisImage]): the visualized stack output.
+        """
+        stack_size = len(stack)
+        vis_output = [None] * stack_size
+        if self._is_stack:
+            predictions = self.predictor(stack)
+        else:
+            predictions = [None] * stack_size
+            
+        for z in range(stack_size):
+            if not self._is_stack:
+                predictions[z] = self.predictor(stack[z])
+
+            # Convert image from OpenCV BGR format to Matplotlib RGB format.
+            stack[z] = stack[z][:, :, ::-1]
+            if self.vis_text:
+                visualizer = TextVisualizer(stack[z], self.metadata, instance_mode=self.instance_mode, cfg=self.cfg)
+            else:
+                visualizer = Visualizer(stack[z], self.metadata, instance_mode=self.instance_mode)
+
+            if "bases" in predictions[z]:
+                self.vis_bases(predictions[z]["bases"])
+            if "panoptic_seg" in predictions[z]:
+                panoptic_seg, segments_info = predictions[z]["panoptic_seg"]
+                vis_output[z] = visualizer.draw_panoptic_seg_predictions(
+                    panoptic_seg.to(self.cpu_device), segments_info
+                )
+            else:
+                if "sem_seg" in predictions[z]:
+                    vis_output[z] = visualizer.draw_sem_seg(
+                        predictions[z]["sem_seg"].argmax(dim=0).to(self.cpu_device))
+                if "instances" in predictions[z]:
+                    instances = predictions[z]["instances"].to(self.cpu_device)
+                    vis_output[z] = visualizer.draw_instance_predictions(predictions=instances)
+
+        return predictions, vis_output
+
 
     def _frame_from_video(self, video):
         while video.isOpened():

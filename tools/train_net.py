@@ -206,7 +206,7 @@ def setup(args):
     #cfg.INPUT.MAX_SIZE_TEST = 1333
 
     # STACK
-    cfg.DATALOADER.STACK = True
+    cfg.INPUT.IS_STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
     #cfg.INPUT.STACK_SEPERATOR = "F"
@@ -218,17 +218,18 @@ def setup(args):
 
     # MODEL
     cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
-    cfg.MODEL.BACKBONE.FREEZE_AT = 0
-    cfg.MODEL.WEIGHTS = ""
+    cfg.MODEL.SEPERATOR.NAME = "SharedConvSeperator"
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
     #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
+    cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    cfg.MODEL.WEIGHTS = ""
     '''
     cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
     cfg.MODEL.PIXEL_STD = [20.1397195,  19.81115748, 21.38672478]
     '''
 
     # SOLVER
-    cfg.SOLVER.IMS_PER_BATCH = 8
+    cfg.SOLVER.IMS_PER_BATCH = 4
     cfg.SOLVER.MAX_ITER = 10000
     cfg.SOLVER.CHECKPOINT_PERIOD = 1000
     cfg.SOLVER.BASE_LR = 0.001

@@ -28,6 +28,8 @@ def setup_cfg(args):
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
 
+    cfg.DATASETS.TEST = ('test',)
+
     # INPUT
     #cfg.INPUT.FORMAT = "BGR"
     #cfg.INPUT.MASK_FORMAT = "polygon"
@@ -35,14 +37,17 @@ def setup_cfg(args):
     #cfg.INPUT.MAX_SIZE_TEST = 1333
 
     # STACK
-    cfg.DATALOADER.STACK = True
+    cfg.DATALOADER.IS_STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
-    #cfg.INPUT.STACK_SEPERATOR = "F"
+    #cfg.INPUT.SLICE_SEPARATOR = "F"
 
-    cfg.DATASETS.TEST = ('test',)
     cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
-    cfg.MODEL.SEPERATOR.NAME = "SharedConvSeperator"
+    cfg.MODEL.BACKBONE.IMAGE_DIM = 3
+    cfg.MODEL.RESNETS.NORM = "BN3d"
+    #cfg.MODEL.RESNETS.RES5_DILATION = 1
+    #cfg..MODEL.RESNETS.STRIDE_IN_1X1 = True
+    cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
     '''
     cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
@@ -209,7 +214,7 @@ if __name__ == "__main__":
         for input in tqdm.tqdm(args.input, disable=not args.output):
             stack = [None] * cfg.INPUT.STACK_SIZE
             for z in range(cfg.INPUT.STACK_SIZE):
-                path = os.path.expanduser(input + cfg.INPUT.STACK_SEPERATOR + str(z) + cfg.INPUT.EXTENSION)
+                path = os.path.expanduser(input + cfg.INPUT.SLICE_SEPARATOR + str(z) + cfg.INPUT.EXTENSION)
                 assert path, "The input path(s) was not found"
                 # use PIL, to be consistent with evaluation
                 stack[z] = read_image(path, format="BGR")
@@ -231,7 +236,7 @@ if __name__ == "__main__":
                 if os.path.isdir(args.output):
                     stack_name = os.path.basename(input)
                     for z in range(cfg.INPUT.STACK_SIZE):
-                        out_filename = os.path.join(args.output, stack_name + cfg.INPUT.STACK_SEPERATOR + str(z) + cfg.INPUT.EXTENSION)
+                        out_filename = os.path.join(args.output, stack_name + cfg.INPUT.SLICE_SEPARATOR + str(z) + cfg.INPUT.EXTENSION)
                         visualized_output[z].save(out_filename)
                 else:
                     logger.info("Please specify a directory with args.output")

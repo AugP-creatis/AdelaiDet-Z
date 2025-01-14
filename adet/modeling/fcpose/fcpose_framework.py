@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 from detectron2.modeling.proposal_generator.build import PROPOSAL_GENERATOR_REGISTRY
-from detectron2.layers import ShapeSpec, NaiveSyncBatchNorm
+from detectron2.layers import ShapeSpec, NaiveSyncBatchNorm2d
 from adet.modeling.fcos import FCOS
 from .basis_module import basis_module
 from .fcpose_head import fcpose_head_module

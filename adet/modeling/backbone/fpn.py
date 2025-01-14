@@ -1,6 +1,7 @@
 from torch import nn
 import torch.nn.functional as F
 import fvcore.nn.weight_init as weight_init
+from detectron2.modeling.weight_init import init_module
 
 from detectron2.modeling.backbone import FPN, build_resnet_backbone
 from detectron2.layers import ShapeSpec
@@ -17,14 +18,24 @@ class LastLevelP6P7(nn.Module):
     C5 or P5 feature.
     """
 
-    def __init__(self, in_channels, out_channels, in_features="res5"):
+    def __init__(self, image_dim, in_channels, out_channels, in_features="res5"):
         super().__init__()
         self.num_levels = 2
         self.in_feature = in_features
-        self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
-        self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
+        if image_dim == 2:
+            self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
+            self.p7 = nn.Conv2d(out_channels, out_channels, 3, 2, 1)
+        elif image_dim == 3:
+            self.p6 = nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, (1, 3, 3), (1, 2, 2), (0, 1, 1)),
+                nn.Conv3d(out_channels, out_channels, (3, 1, 1), (1, 1, 1), (1, 0, 0))
+            )
+            self.p7 = nn.Sequential(
+                nn.Conv3d(out_channels, out_channels, (1, 3, 3), (1, 2, 2), (0, 1, 1)),
+                nn.Conv3d(out_channels, out_channels, (3, 1, 1), (1, 1, 1), (1, 0, 0))
+            )
         for module in [self.p6, self.p7]:
-            weight_init.c2_xavier_fill(module)
+            init_module(module, weight_init.c2_xavier_fill)
 
     def forward(self, x):
         p6 = self.p6(x)
@@ -37,13 +48,19 @@ class LastLevelP6(nn.Module):
     This module is used in FCOS to generate extra layers
     """
 
-    def __init__(self, in_channels, out_channels, in_features="res5"):
+    def __init__(self, image_dim, in_channels, out_channels, in_features="res5"):
         super().__init__()
         self.num_levels = 1
         self.in_feature = in_features
-        self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
+        if image_dim == 2:
+            self.p6 = nn.Conv2d(in_channels, out_channels, 3, 2, 1)
+        elif image_dim == 3:
+            self.p6 = nn.Sequential(
+                nn.Conv3d(in_channels, out_channels, (1, 3, 3), (1, 2, 2), (0, 1, 1)),
+                nn.Conv3d(out_channels, out_channels, (3, 1, 1), (1, 1, 1), (1, 0, 0))
+            )
         for module in [self.p6]:
-            weight_init.c2_xavier_fill(module)
+            init_module(module, weight_init.c2_xavier_fill)
 
     def forward(self, x):
         p6 = self.p6(x)
@@ -59,25 +76,35 @@ def build_fcos_resnet_fpn_backbone(cfg, input_shape: ShapeSpec):
     Returns:
         backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    if cfg.MODEL.BACKBONE.ANTI_ALIAS:
-        bottom_up = build_resnet_lpf_backbone(cfg, input_shape)
-    elif cfg.MODEL.RESNETS.DEFORM_INTERVAL > 1:
-        bottom_up = build_resnet_interval_backbone(cfg, input_shape)
-    elif cfg.MODEL.MOBILENET:
-        bottom_up = build_mnv2_backbone(cfg, input_shape)
-    else:
+    image_dim = cfg.MODEL.BACKBONE.IMAGE_DIM
+
+    if image_dim == 2:
+        if cfg.MODEL.BACKBONE.ANTI_ALIAS:
+            bottom_up = build_resnet_lpf_backbone(cfg, input_shape)
+        elif cfg.MODEL.RESNETS.DEFORM_INTERVAL > 1:
+            bottom_up = build_resnet_interval_backbone(cfg, input_shape)
+        elif cfg.MODEL.MOBILENET:
+            bottom_up = build_mnv2_backbone(cfg, input_shape)
+        else:
+            bottom_up = build_resnet_backbone(cfg, input_shape)
+
+    elif image_dim == 3:
         bottom_up = build_resnet_backbone(cfg, input_shape)
+
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
     top_levels = cfg.MODEL.FCOS.TOP_LEVELS
     in_channels_top = out_channels
+
     if top_levels == 2:
-        top_block = LastLevelP6P7(in_channels_top, out_channels, "p5")
+        top_block = LastLevelP6P7(image_dim, in_channels_top, out_channels, "p5")
     if top_levels == 1:
-        top_block = LastLevelP6(in_channels_top, out_channels, "p5")
+        top_block = LastLevelP6(image_dim, in_channels_top, out_channels, "p5")
     elif top_levels == 0:
         top_block = None
+
     backbone = FPN(
+        image_dim=image_dim,
         bottom_up=bottom_up,
         in_features=in_features,
         out_channels=out_channels,

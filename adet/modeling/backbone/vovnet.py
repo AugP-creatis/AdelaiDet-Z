@@ -11,7 +11,7 @@ from detectron2.modeling.backbone.fpn import FPN
 from detectron2.layers import (
     Conv2d,
     DeformConv,
-    FrozenBatchNorm2d,
+    FrozenBatchNorm,
     ShapeSpec,
     get_norm,
 )
@@ -287,7 +287,7 @@ class VoVNet(Backbone):
                 m = getattr(self, "stage" + str(stage_index+1))
             for p in m.parameters():
                 p.requires_grad = False
-                FrozenBatchNorm2d.convert_frozen_batchnorm(self)
+                FrozenBatchNorm.convert_frozen_batchnorm(self)
 
     def forward(self, x):
         outputs = {}

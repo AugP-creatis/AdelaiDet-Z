@@ -109,7 +109,7 @@ def measure_layer(layer, *args):
             delta_params = get_layer_param(layer)
 
         ### ops_nothing
-        elif type_name in ['BatchNorm2d', 'Dropout2d', 'DropChannel', 'Dropout', 'FrozenBatchNorm2d', 'GroupNorm']:
+        elif type_name in ['BatchNorm2d', 'Dropout2d', 'DropChannel', 'Dropout', 'FrozenBatchNorm', 'GroupNorm']:
             delta_params = get_layer_param(layer)
 
         elif type_name in ['SumTwo']:
@@ -132,7 +132,7 @@ def measure_layer(layer, *args):
 
         elif type_name in ['FCOSPostProcessor', 'RPNPostProcessor', 'KeypointPostProcessor',
                            'ROIAlign', 'PostProcessor', 'KeypointRCNNPredictor', 
-                           'NaiveSyncBatchNorm', 'Upsample', 'Sequential']:
+                           'NaiveSyncBatchNorm2d', 'NaiveSyncBatchNorm3d', 'Upsample', 'Sequential']:
             pass
 
         elif type_name in ['DeformConv']:

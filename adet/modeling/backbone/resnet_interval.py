@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
-from detectron2.layers import FrozenBatchNorm2d
+from detectron2.layers import FrozenBatchNorm
 from detectron2.modeling.backbone import BACKBONE_REGISTRY
 from detectron2.modeling.backbone.resnet import (
     BasicStem,
@@ -56,7 +56,7 @@ def build_resnet_interval_backbone(cfg, input_shape):
     if freeze_at >= 1:
         for p in stem.parameters():
             p.requires_grad = False
-        stem = FrozenBatchNorm2d.convert_frozen_batchnorm(stem)
+        stem = FrozenBatchNorm.convert_frozen_batchnorm(stem)
 
     # fmt: off
     out_features        = cfg.MODEL.RESNETS.OUT_FEATURES

@@ -4,7 +4,7 @@ import logging
 import torch
 
 from detectron2.modeling.backbone import build_backbone
-from detectron2.modeling.seperators import build_seperator
+from detectron2.modeling.separators import build_separator
 from detectron2.layers import ShapeSpec
 from detectron2.structures import ImageList
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
@@ -25,8 +25,14 @@ class CondInst_Z(CondInst):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-        self.backbone = build_backbone(cfg, ShapeSpec(channels = cfg.INPUT.STACK_SIZE * len(cfg.MODEL.PIXEL_MEAN)))
-        self.seperator = build_seperator(cfg, self.backbone.output_shape())
+        self._image_dim = cfg.MODEL.BACKBONE.IMAGE_DIM
+        if self._image_dim == 2:
+            input_shape = ShapeSpec(channels = cfg.INPUT.STACK_SIZE * len(cfg.MODEL.PIXEL_MEAN))
+        elif self._image_dim == 3:
+            input_shape = ShapeSpec(stack_size=cfg.INPUT.STACK_SIZE, channels=len(cfg.MODEL.PIXEL_MEAN))
+        
+        self.backbone = build_backbone(cfg, input_shape)
+        self.separator = build_separator(cfg, self.backbone.output_shape())
         self._stack_size = cfg.INPUT.STACK_SIZE
 
     def forward(self, batched_inputs):
@@ -38,12 +44,15 @@ class CondInst_Z(CondInst):
         # normalize images
         stacks_norm = [None] * nb_stacks
         for s in range(nb_stacks):
-            stacks_norm[s] = torch.stack([self.normalizer(x) for x in original_stacks[s]])
+            stacks_norm[s] = torch.stack([self.normalizer(x) for x in original_stacks[s]], dim = 1)
         stacks_norm = ImageList.from_tensors(stacks_norm, self.backbone.size_divisibility)
 
-        tensor_size = stacks_norm.tensor.shape
-        concat_stacks = stacks_norm.tensor.view(tensor_size[0], -1, tensor_size[-2], tensor_size[-1])
-        features = self.backbone(concat_stacks)
+        if self._image_dim == 2:
+            tensor_size = stacks_norm.tensor.shape
+            input_tensor = stacks_norm.tensor.view(tensor_size[0], -1, tensor_size[-2], tensor_size[-1])    #Concat
+        elif self._image_dim == 3:
+            input_tensor = stacks_norm.tensor
+        features = self.backbone(input_tensor)
 
         if "instances" in batched_inputs[0][0]:
             stack_gt_instances = [None] * nb_stacks
@@ -83,7 +92,7 @@ class CondInst_Z(CondInst):
             z_gt_instances = [None] * self._stack_size
         
         
-        z_features = self.seperator(features)
+        z_features = self.separator(features)
 
         if self.training:
             losses = {}

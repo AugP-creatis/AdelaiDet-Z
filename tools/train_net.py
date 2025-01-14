@@ -195,7 +195,6 @@ def setup(args):
     # DATASETS
     cfg.DATASETS.TRAIN = ("train",)
     cfg.DATASETS.VAL = ("val",)
-    cfg.DATASETS.TEST = ()
 
     # INPUT
     #cfg.INPUT.FORMAT = "BGR"
@@ -206,10 +205,10 @@ def setup(args):
     #cfg.INPUT.MAX_SIZE_TEST = 1333
 
     # STACK
-    cfg.INPUT.IS_STACK = True
+    cfg.DATALOADER.IS_STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
-    #cfg.INPUT.STACK_SEPERATOR = "F"
+    #cfg.INPUT.SLICE_SEPARATOR = "F"
 
     # DATALOADER
     cfg.DATALOADER.NUM_WORKERS = 1  #max 2 recommended
@@ -218,10 +217,14 @@ def setup(args):
 
     # MODEL
     cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
-    cfg.MODEL.SEPERATOR.NAME = "SharedConvSeperator"
+    cfg.MODEL.BACKBONE.IMAGE_DIM = 3
+    cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    cfg.MODEL.RESNETS.NORM = "BN3d"
+    #cfg.MODEL.RESNETS.RES5_DILATION = 1
+    #cfg..MODEL.RESNETS.STRIDE_IN_1X1 = True
+    cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
     #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
-    cfg.MODEL.BACKBONE.FREEZE_AT = 0
     cfg.MODEL.WEIGHTS = ""
     '''
     cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
@@ -229,10 +232,10 @@ def setup(args):
     '''
 
     # SOLVER
-    cfg.SOLVER.IMS_PER_BATCH = 4
-    cfg.SOLVER.MAX_ITER = 10000
-    cfg.SOLVER.CHECKPOINT_PERIOD = 1000
-    cfg.SOLVER.BASE_LR = 0.001
+    cfg.SOLVER.IMS_PER_BATCH = 2
+    cfg.SOLVER.MAX_ITER = 5000
+    cfg.SOLVER.CHECKPOINT_PERIOD = 500
+    cfg.SOLVER.BASE_LR = 0.0001
     # cfg.SOLVER.REFERENCE_WORLD_SIZE = 0
 
     #Remove all online augmentations

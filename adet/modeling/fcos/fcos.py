@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from detectron2.layers import ShapeSpec, NaiveSyncBatchNorm
+from detectron2.layers import ShapeSpec, NaiveSyncBatchNorm2d
 from detectron2.modeling.proposal_generator.build import PROPOSAL_GENERATOR_REGISTRY
 
 from adet.layers import DFConv2d, NaiveGroupNorm
@@ -170,7 +170,7 @@ class FCOSHead(nn.Module):
                     ]))
                 elif norm == "SyncBN":
                     tower.append(ModuleListDial([
-                        NaiveSyncBatchNorm(in_channels) for _ in range(self.num_levels)
+                        NaiveSyncBatchNorm2d(in_channels) for _ in range(self.num_levels)
                     ]))
                 tower.append(nn.ReLU())
             self.add_module('{}_tower'.format(head),

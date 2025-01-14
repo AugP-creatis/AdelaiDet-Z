@@ -4,7 +4,7 @@
 
 from torch import nn
 from torch.nn import BatchNorm2d
-#from detectron2.layers.batch_norm import NaiveSyncBatchNorm as BatchNorm2d
+#from detectron2.layers.batch_norm import NaiveSyncBatchNorm2d as BatchNorm2d
 from detectron2.layers import Conv2d
 from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.modeling.backbone import Backbone

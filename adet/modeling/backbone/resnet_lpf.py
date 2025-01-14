@@ -39,7 +39,7 @@
 
 import torch.nn as nn
 
-from detectron2.layers.batch_norm import NaiveSyncBatchNorm
+from detectron2.layers.batch_norm import NaiveSyncBatchNorm2d
 from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.modeling.backbone import Backbone
 
@@ -283,7 +283,7 @@ def build_resnet_lpf_backbone(cfg, input_shape):
     out_feature_channels = {"res2": 256, "res3": 512,
                             "res4": 1024, "res5": 2048}
     out_feature_strides = {"res2": 4, "res3": 8, "res4": 16, "res5": 32}
-    model = ResNetLPF(cfg, Bottleneck, num_blocks_per_stage, norm_layer=NaiveSyncBatchNorm,
+    model = ResNetLPF(cfg, Bottleneck, num_blocks_per_stage, norm_layer=NaiveSyncBatchNorm2d,
                       filter_size=3, pool_only=True, return_idx=out_stage_idx)
     model._out_features = out_features
     model._out_feature_channels = out_feature_channels

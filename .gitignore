@@ -8,6 +8,7 @@ test_dir/
 *.jpg
 *.png
 *.txt
+*.pbs
 
 # compilation and distribution
 __pycache__

@@ -42,13 +42,21 @@ def setup_cfg(args):
     #cfg.INPUT.EXTENSION = ".png"
     #cfg.INPUT.SLICE_SEPARATOR = "F"
 
+    # MODEL
+    cfg.MODEL.USE_AMP = True
     cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
     cfg.MODEL.BACKBONE.IMAGE_DIM = 3
+    #cfg.MODEL.BACKBONE.ANTI_ALIAS = False
+    #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
+    #cfg.MODEL.MOBILENET = False
+    cfg.MODEL.RESNETS.DEPTH = 18
+    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
     cfg.MODEL.RESNETS.NORM = "BN3d"
     #cfg.MODEL.RESNETS.RES5_DILATION = 1
     #cfg..MODEL.RESNETS.STRIDE_IN_1X1 = True
     cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
+    #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
     '''
     cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
     cfg.MODEL.PIXEL_STD = [20.1397195,  19.81115748, 21.38672478]

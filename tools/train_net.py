@@ -68,7 +68,8 @@ class Trainer(DefaultTrainer):
                     self.model,
                     self.cfg.OUTPUT_DIR,
                     optimizer=self.optimizer,
-                    scheduler=self.scheduler,
+                    scaler=self.scaler,
+                    scheduler=self.scheduler
                 )
                 ret[i] = hooks.PeriodicCheckpointer(self.checkpointer, self.cfg.SOLVER.CHECKPOINT_PERIOD)
         return ret
@@ -216,9 +217,15 @@ def setup(args):
     cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False
 
     # MODEL
+    cfg.MODEL.USE_AMP = True
     cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
     cfg.MODEL.BACKBONE.IMAGE_DIM = 3
     cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    #cfg.MODEL.BACKBONE.ANTI_ALIAS = False
+    #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
+    #cfg.MODEL.MOBILENET = False
+    cfg.MODEL.RESNETS.DEPTH = 18
+    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
     cfg.MODEL.RESNETS.NORM = "BN3d"
     #cfg.MODEL.RESNETS.RES5_DILATION = 1
     #cfg..MODEL.RESNETS.STRIDE_IN_1X1 = True
@@ -232,11 +239,11 @@ def setup(args):
     '''
 
     # SOLVER
-    cfg.SOLVER.IMS_PER_BATCH = 2
-    cfg.SOLVER.MAX_ITER = 5000
+    cfg.SOLVER.IMS_PER_BATCH = 6
+    cfg.SOLVER.MAX_ITER = 10000
     cfg.SOLVER.CHECKPOINT_PERIOD = 500
-    cfg.SOLVER.BASE_LR = 0.0001
-    # cfg.SOLVER.REFERENCE_WORLD_SIZE = 0
+    cfg.SOLVER.BASE_LR = 0.001
+    cfg.SOLVER.REFERENCE_WORLD_SIZE = args.num_gpus   #GPU number, batch size per GPU is IMS_PER_BATCH // REFERENCE_WORLD_SIZE
 
     #Remove all online augmentations
     cfg.INPUT.HFLIP_TRAIN = False

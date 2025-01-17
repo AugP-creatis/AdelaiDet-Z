@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
     cfg = setup_cfg(args)
     classes = eval(args.classes_dict)
-    # Register the train and validation datasets.
+    # Register the test dataset.
     DatasetCatalog.register('test', lambda: get_dicts(args.data_dir, 'test', args.cross_val, classes))
     MetadataCatalog.get('test').set(thing_classes=list(classes.keys()))
 

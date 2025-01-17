@@ -196,6 +196,7 @@ def setup(args):
     # DATASETS
     cfg.DATASETS.TRAIN = ("train",)
     cfg.DATASETS.VAL = ("val",)
+    cfg.DATASETS.TEST = ("test",)
 
     # INPUT
     #cfg.INPUT.FORMAT = "BGR"
@@ -347,12 +348,14 @@ def main(args):
     cfg = setup(args)
 
     classes = eval(args.classes_dict)
-    # Register the train and validation datasets.
+    # Register the train, validation and test datasets.
     DatasetCatalog.register('train', lambda: get_dicts(args.data_dir, 'train', args.cross_val, classes))
     DatasetCatalog.register('val', lambda: get_dicts(args.data_dir, 'val', args.cross_val, classes))
+    DatasetCatalog.register('test', lambda: get_dicts(args.data_dir, 'test', args.cross_val, classes))
     # Set the metadata for the dataset.
     MetadataCatalog.get('train').set(thing_classes=list(classes.keys()))
     MetadataCatalog.get('val').set(thing_classes=list(classes.keys()))
+    MetadataCatalog.get('test').set(thing_classes=list(classes.keys()), evaluator_type="coco")
 
     if args.eval_only:
         model = Trainer.build_model(cfg)
@@ -385,7 +388,7 @@ if __name__ == "__main__":
     parser.add_argument('--data-dir', default='/home/perrier/Bacteriocytes_seg/data')
     parser.add_argument('--classes-dict',type=str,default="{'Intact_Sharp':0, 'Broken_Sharp':2}")
     #Classes are like "{'Intact_Sharp':0,'Intact_Blurry':1,'Broken_Sharp':2,'Broken_Blurry':3}"
-    parser.add_argument('--cross-val', default=4)
+    parser.add_argument('--cross-val', default=3)
 
     args = parser.parse_args()
     print("Command Line Args:", args)

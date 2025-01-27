@@ -1,0 +1,10 @@
+_BASE_: "Base-CondInstZ.yaml"
+MODEL:
+  BACKBONE:
+    IMAGE_DIM: 3
+  RESNETS:
+    DEPTH: 18
+    NORM: "BN3d"
+  SEPARATOR:
+    NAME: "From3dTo2d"
+OUTPUT_DIR: "output/CondInstZ_R_18_3d"

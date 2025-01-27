@@ -40,6 +40,7 @@ class VisualizationDemo(object):
             self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)  #Not modified yet for stack
         else:
             self.predictor = DefaultPredictor(cfg)
+        self._filter_duplicates = cfg.OUTPUT.FILTER_DUPLICATES
 
     def run_on_image(self, image):
         """
@@ -92,6 +93,8 @@ class VisualizationDemo(object):
         vis_output = [None] * stack_size
         if self._is_stack:
             predictions = self.predictor(stack)
+            if self._filter_duplicates:
+                predictions = [predictions for z in range(stack_size)]
         else:
             predictions = [None] * stack_size
             

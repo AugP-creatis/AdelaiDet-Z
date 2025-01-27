@@ -30,43 +30,49 @@ def setup_cfg(args):
 
     cfg.DATASETS.TEST = ('test',)
 
-    # INPUT
-    #cfg.INPUT.FORMAT = "BGR"
-    #cfg.INPUT.MASK_FORMAT = "polygon"
-    #cfg.INPUT.MIN_SIZE_TEST = 800
-    #cfg.INPUT.MAX_SIZE_TEST = 1333
-
     # STACK
-    cfg.DATALOADER.IS_STACK = True
+    #cfg.DATALOADER.IS_STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
     #cfg.INPUT.SLICE_SEPARATOR = "F"
 
+    # INPUT
+    #cfg.INPUT.FORMAT = "BGR"   # Model input format (has to be BGR for seamless inference when reading RGB images with opencv)
+    #cfg.INPUT.MASK_FORMAT = "polygon"
+    #cfg.INPUT.MIN_SIZE_TRAIN = (480,)
+    #cfg.INPUT.MAX_SIZE_TRAIN = 1333
+    #cfg.INPUT.MIN_SIZE_TEST = 480
+    #cfg.INPUT.MAX_SIZE_TEST = 1333
+
     # MODEL
-    cfg.MODEL.USE_AMP = True
-    cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
-    cfg.MODEL.BACKBONE.IMAGE_DIM = 3
+    #cfg.MODEL.WEIGHTS = ""
+    #cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    
+    #cfg.MODEL.USE_AMP = True
+    #cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
+    #cfg.MODEL.BACKBONE.IMAGE_DIM = 3
     #cfg.MODEL.BACKBONE.ANTI_ALIAS = False
     #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
     #cfg.MODEL.MOBILENET = False
-    cfg.MODEL.RESNETS.DEPTH = 18
-    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
-    cfg.MODEL.RESNETS.NORM = "BN3d"
+    #cfg.MODEL.RESNETS.DEPTH = 18
+    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {10:64, 18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
+    #cfg.MODEL.RESNETS.NORM = "BN3d"
     #cfg.MODEL.RESNETS.RES5_DILATION = 1
-    #cfg..MODEL.RESNETS.STRIDE_IN_1X1 = True
-    cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
+    #cfg.MODEL.RESNETS.STRIDE_IN_1X1 = True
+    #cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
     #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
-    '''
-    cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
-    cfg.MODEL.PIXEL_STD = [20.1397195,  19.81115748, 21.38672478]
-    '''
+
+    #cfg.MODEL.PIXEL_MEAN = [87.779, 100.134, 101.969]   #In BGR order
+    #cfg.MODEL.PIXEL_STD = [16.368, 13.607, 13.170]  #In BGR order
+
+    cfg.OUTPUT.FILTER_DUPLICATES = True
 
     #Remove all online augmentations
-    cfg.INPUT.HFLIP_TRAIN = False
-    cfg.INPUT.CROP.ENABLED = False
-    cfg.INPUT.IS_ROTATE = False
-    cfg.TEST.AUG.ENABLED = False
+    #cfg.INPUT.HFLIP_TRAIN = False
+    #cfg.INPUT.CROP.ENABLED = False
+    #cfg.INPUT.IS_ROTATE = False
+    #cfg.TEST.AUG.ENABLED = False
 
     # Set score_threshold for builtin models
     cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
@@ -83,7 +89,7 @@ def get_parser():
     parser.add_argument('--data-dir', default='/home/perrier/Bacteriocytes_seg/data')
     parser.add_argument('--classes-dict',type=str,default="{'Intact_Sharp':0, 'Broken_Sharp':2}")
     #Classes are like "{'Intact_Sharp':0,'Intact_Blurry':1,'Broken_Sharp':2,'Broken_Blurry':3}"
-    parser.add_argument('--cross-val', default=4)
+    parser.add_argument('--cross-val', default=3)
 
     parser.add_argument(
         "--config-file",
@@ -156,8 +162,8 @@ def get_dicts(dir, mode, idx_cross_val, classes):
     dataset_dicts = []
     dict_instance_label = {value:num for num, value in enumerate(classes.values())}
     for fold in folds_list:
-        img_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_images', 'images')
-        ann_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_labels','detectron2')
+        img_dir = os.path.join(dir, 'Cross-valRGB', 'Xval'+str(fold)+'_images', 'images')
+        ann_dir = os.path.join(dir, 'Cross-valRGB', 'Xval'+str(fold)+'_labels','detectron2')
     
 
         for idx, file in tqdm(enumerate(os.listdir(ann_dir)), desc=f'cross validation {fold}, mode {mode}'):
@@ -225,14 +231,17 @@ if __name__ == "__main__":
                 path = os.path.expanduser(input + cfg.INPUT.SLICE_SEPARATOR + str(z) + cfg.INPUT.EXTENSION)
                 assert path, "The input path(s) was not found"
                 # use PIL, to be consistent with evaluation
-                stack[z] = read_image(path, format="BGR")
+                stack[z] = read_image(path, format=cfg.INPUT.FORMAT)
 
             start_time = time.time()
             predictions, visualized_output = demo.run_on_stack(stack)
 
-            nb_predictions = 0
-            for z in range(cfg.INPUT.STACK_SIZE):
-                nb_predictions += len(predictions[z]["instances"])
+            if cfg.OUTPUT.FILTER_DUPLICATES:
+                nb_predictions = len(predictions[0]["instances"])
+            else:
+                nb_predictions = 0
+                for z in range(cfg.INPUT.STACK_SIZE):
+                    nb_predictions += len(predictions[z]["instances"])
 
             logger.info(
                 "{}: detected {} instances in {:.2f}s".format(

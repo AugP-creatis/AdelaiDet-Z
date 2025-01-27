@@ -2,12 +2,14 @@
 import logging
 
 import torch
+from torchvision.ops import nms
 
+from detectron2.structures import ImageList
 from detectron2.modeling.backbone import build_backbone
 from detectron2.modeling.separators import build_separator
-from detectron2.layers import ShapeSpec
-from detectron2.structures import ImageList
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
+from detectron2.layers import ShapeSpec
+from detectron2.structures.instances import Instances
 
 from adet.modeling.condinst import CondInst
 
@@ -34,6 +36,7 @@ class CondInst_Z(CondInst):
         self.backbone = build_backbone(cfg, input_shape)
         self.separator = build_separator(cfg, self.backbone.output_shape())
         self._stack_size = cfg.INPUT.STACK_SIZE
+        self._filter_duplicates = cfg.OUTPUT.FILTER_DUPLICATES
 
     def forward(self, batched_inputs):
         nb_stacks = len(batched_inputs)
@@ -96,15 +99,11 @@ class CondInst_Z(CondInst):
 
         if self.training:
             losses = {}
-
             for z in range(self._stack_size):
-
                 mask_feats, sem_losses = self.mask_branch(z_features[z], z_gt_instances[z])
-
                 proposals, proposal_losses = self.proposal_generator(
                     stacks_norm, z_features[z], z_gt_instances[z], self.controller
                 )
-
                 mask_losses = self._forward_mask_heads_train(proposals, mask_feats, z_gt_instances[z])
                 
                 sem_losses_keys = list(sem_losses.keys()).copy()
@@ -126,30 +125,48 @@ class CondInst_Z(CondInst):
             return losses
                 
         else:
-            processed_results = [[None] * self._stack_size for s in range(nb_stacks)]
-                
+            pred_instances_w_masks = [None] * self._stack_size
             for z in range(self._stack_size):
-
                 mask_feats, sem_losses = self.mask_branch(z_features[z], z_gt_instances[z])
-
                 proposals, proposal_losses = self.proposal_generator(
                     stacks_norm, z_features[z], z_gt_instances[z], self.controller
                 )
+                pred_instances_w_masks[z] = self._forward_mask_heads_test(proposals, mask_feats)
 
-                pred_instances_w_masks = self._forward_mask_heads_test(proposals, mask_feats)
+            padded_im_h, padded_im_w = stacks_norm.tensor.size()[-2:]
 
-                padded_im_h, padded_im_w = stacks_norm.tensor.size()[-2:]
-
-                for im_id, (input_per_stack, image_size) in enumerate(zip(batched_inputs, stacks_norm.image_sizes)):
+            if self._filter_duplicates:
+                processed_results = [None] * nb_stacks
+            else:
+                processed_results = [[None] * self._stack_size for s in range(nb_stacks)]
+            
+            for stack_id, (input_per_stack, image_size) in enumerate(zip(batched_inputs, stacks_norm.image_sizes)):
+                stack_instances_list = []
+                for z in range(self._stack_size):
                     height = input_per_stack[z].get("height", image_size[0])
                     width = input_per_stack[z].get("width", image_size[1])
 
-                    instances_per_im = pred_instances_w_masks[pred_instances_w_masks.im_inds == im_id]
+                    instances_per_im = pred_instances_w_masks[z][pred_instances_w_masks[z].im_inds == stack_id]
                     instances_per_im = self.postprocess(
                         instances_per_im, height, width,
                         padded_im_h, padded_im_w
                     )
 
-                    processed_results[im_id][z] = {"instances": instances_per_im}
+                    if self._filter_duplicates:
+                        if instances_per_im.has("pred_masks"):
+                            stack_instances_list.append(instances_per_im)
+                    else:
+                        processed_results[stack_id][z] = {"instances": instances_per_im}
+
+                if self._filter_duplicates:
+                    if len(stack_instances_list) == 0:
+                        stack_instances_list.append(instances_per_im)
+                    stack_instances = Instances.cat(stack_instances_list)
+                    keep = nms(
+                        stack_instances.pred_boxes.tensor,
+                        stack_instances.scores,
+                        0.9
+                    )   # BoxMode has to be XYXY_ABS, which is the case (see dataset_mapper.py)
+                    processed_results[stack_id] = {"instances": stack_instances[keep]}
 
             return processed_results

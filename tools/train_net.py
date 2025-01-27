@@ -122,7 +122,7 @@ class Trainer(DefaultTrainer):
         if cfg.MODEL.FCPOSE_ON:
             mapper = FCPoseDatasetMapper(cfg, True)
         else:
-            mapper = DatasetMapperWithBasis(cfg, True, image_format="BGR")
+            mapper = DatasetMapperWithBasis(cfg, True)
         return build_detection_train_loader(cfg, mapper=mapper)
 
     @classmethod
@@ -198,59 +198,66 @@ def setup(args):
     cfg.DATASETS.VAL = ("val",)
     cfg.DATASETS.TEST = ("test",)
 
-    # INPUT
-    #cfg.INPUT.FORMAT = "BGR"
-    #cfg.INPUT.MASK_FORMAT = "polygon"
-    cfg.INPUT.MIN_SIZE_TRAIN = (800,)
-    #cfg.INPUT.MAX_SIZE_TRAIN = 1333
-    #cfg.INPUT.MIN_SIZE_TEST = 800
-    #cfg.INPUT.MAX_SIZE_TEST = 1333
-
     # STACK
-    cfg.DATALOADER.IS_STACK = True
+    #cfg.DATALOADER.IS_STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
     #cfg.INPUT.SLICE_SEPARATOR = "F"
 
-    # DATALOADER
-    cfg.DATALOADER.NUM_WORKERS = 1  #max 2 recommended
-    cfg.DATALOADER.ASPECT_RATIO_GROUPING = False
-    cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False
+    # INPUT
+    #cfg.INPUT.FORMAT = "BGR"   # Model input format (has to be BGR for seamless inference when reading RGB images with opencv)
+    #cfg.INPUT.MASK_FORMAT = "polygon"
+    #cfg.INPUT.MIN_SIZE_TRAIN = (480,)
+    #cfg.INPUT.MAX_SIZE_TRAIN = 1333
+    #cfg.INPUT.MIN_SIZE_TEST = 480
+    #cfg.INPUT.MAX_SIZE_TEST = 1333
 
+    # DATALOADER
+    #cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False
+    #cfg.DATALOADER.ASPECT_RATIO_GROUPING = False
+    cfg.DATALOADER.NUM_WORKERS = 1  #max 2 recommended
+    
     # MODEL
-    cfg.MODEL.USE_AMP = True
-    cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
-    cfg.MODEL.BACKBONE.IMAGE_DIM = 3
-    cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    #cfg.MODEL.WEIGHTS = ""
+    #cfg.MODEL.BACKBONE.FREEZE_AT = 0
+    
+    #cfg.MODEL.USE_AMP = True
+    #cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
+    #cfg.MODEL.BACKBONE.IMAGE_DIM = 3
     #cfg.MODEL.BACKBONE.ANTI_ALIAS = False
     #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
     #cfg.MODEL.MOBILENET = False
-    cfg.MODEL.RESNETS.DEPTH = 18
-    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
-    cfg.MODEL.RESNETS.NORM = "BN3d"
+    #cfg.MODEL.RESNETS.DEPTH = 18
+    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {10:64, 18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
+    #cfg.MODEL.RESNETS.NORM = "BN3d"
     #cfg.MODEL.RESNETS.RES5_DILATION = 1
-    #cfg..MODEL.RESNETS.STRIDE_IN_1X1 = True
-    cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
+    #cfg.MODEL.RESNETS.STRIDE_IN_1X1 = True
+    #cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
     #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
-    cfg.MODEL.WEIGHTS = ""
-    '''
-    cfg.MODEL.PIXEL_MEAN = [218.96615195, 205.58776696, 199.45428186]
-    cfg.MODEL.PIXEL_STD = [20.1397195,  19.81115748, 21.38672478]
-    '''
+
+    #cfg.MODEL.PIXEL_MEAN = [87.779, 100.134, 101.969]   #In BGR order
+    #cfg.MODEL.PIXEL_STD = [16.368, 13.607, 13.170]  #In BGR order
+
+    cfg.OUTPUT.FILTER_DUPLICATES = True
+
+    #cfg.MODEL.MASK_ON = True # (Evaluation) To compute IoU on mask and not bounding box
+    cfg.TEST.EVAL_PERIOD = 0
 
     # SOLVER
-    cfg.SOLVER.IMS_PER_BATCH = 6
-    cfg.SOLVER.MAX_ITER = 10000
-    cfg.SOLVER.CHECKPOINT_PERIOD = 500
-    cfg.SOLVER.BASE_LR = 0.001
+    #cfg.SOLVER.IMS_PER_BATCH = 4
+    #cfg.SOLVER.MAX_ITER = 10000
+    #cfg.SOLVER.CHECKPOINT_PERIOD = 500
+    #cfg.SOLVER.BASE_LR = 0.001
+    #cfg.SOLVER.WARMUP_ITERS = 2000
+    #cfg.SOLVER.STEPS = (7000,)
     cfg.SOLVER.REFERENCE_WORLD_SIZE = args.num_gpus   #GPU number, batch size per GPU is IMS_PER_BATCH // REFERENCE_WORLD_SIZE
 
     #Remove all online augmentations
-    cfg.INPUT.HFLIP_TRAIN = False
-    cfg.INPUT.CROP.ENABLED = False
-    cfg.INPUT.IS_ROTATE = False
-    cfg.TEST.AUG.ENABLED = False
+    #cfg.INPUT.HFLIP_TRAIN = False
+    #cfg.INPUT.CROP.ENABLED = False
+    #cfg.INPUT.IS_ROTATE = False
+    #cfg.TEST.AUG.ENABLED = False
 
     cfg.merge_from_list(args.opts)
     cfg.freeze()
@@ -304,8 +311,8 @@ def get_dicts(dir, mode, idx_cross_val, classes):
     dataset_dicts = []
     dict_instance_label = {value:num for num, value in enumerate(classes.values())}
     for fold in folds_list:
-        img_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_images', 'images')
-        ann_dir = os.path.join(dir, 'Cross-val', 'Xval'+str(fold)+'_labels','detectron2')
+        img_dir = os.path.join(dir, 'Cross-valRGB', 'Xval'+str(fold)+'_images', 'images')
+        ann_dir = os.path.join(dir, 'Cross-valRGB', 'Xval'+str(fold)+'_labels','detectron2')
     
 
         for idx, file in tqdm(enumerate(os.listdir(ann_dir)), desc=f'cross validation {fold}, mode {mode}'):

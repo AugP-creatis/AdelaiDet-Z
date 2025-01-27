@@ -54,8 +54,8 @@ class DatasetMapperWithBasis(DatasetMapper):
     This caller enables the default Detectron2 mapper to read an additional basis semantic label
     """
 
-    def __init__(self, cfg, is_train=True, image_format=None):
-        super().__init__(cfg, is_train, image_format=image_format)
+    def __init__(self, cfg, is_train=True):
+        super().__init__(cfg, is_train)
 
         # Rebuild augmentations
         logger.info(

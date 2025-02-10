@@ -103,8 +103,18 @@ class RandomCropWithInstance(RandomCrop):
         self.input_args = ("image", "boxes")
 
     def get_transform(self, img, boxes):
+        ch = self.get_random_param('ch')
+        cw = self.get_random_param('cw')
+        h0r = self.get_random_param('h0r')
+        w0r = self.get_random_param('w0r')
+        if ch is None or cw is None:
+            ch, cw = self._randomize_crop_size()
+        if h0r is None or w0r is None:
+            h0r, w0r = self._randomize_crop_position()
+
         image_size = img.shape[:2]
-        crop_size = self.get_crop_size(image_size)
+
+        crop_size = self._get_crop_size(image_size, (ch, cw))
         return gen_crop_transform_with_instance(
             crop_size, image_size, boxes, crop_box=self.crop_instance
         )

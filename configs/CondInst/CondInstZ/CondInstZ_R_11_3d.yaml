@@ -1,9 +1,9 @@
 _BASE_: "Base-CondInstZ.yaml"
 MODEL:
   BACKBONE:
-    IMAGE_DIM: 3
+    DIM: 3
   RESNETS:
-    DEPTH: 10
+    DEPTH: 11
     NORM: "BN3d"
   SEPARATOR:
     NAME: "From3dTo2d"

@@ -80,6 +80,31 @@ class CondInst(nn.Module):
         super().__init__()
         self.device = torch.device(cfg.MODEL.DEVICE)
 
+        self._apply_early_filter = cfg.MODEL.EARLY_FILTER.ENABLED
+        if self._apply_early_filter:
+            early_filter_weights = {
+                "Sobel": {
+                    "x": [
+                        [-1,0,1],
+                        [-2,0,2],
+                        [-1,0,1]
+                    ],
+                    "y": [
+                        [-1,-2,-1],
+                        [ 0, 0, 0],
+                        [ 1, 2, 1]
+                    ]
+                }
+            }[cfg.MODEL.EARLY_FILTER.OPERATOR]
+
+            early_filter_scale = {
+                "Sobel": 1/8
+            }[cfg.MODEL.EARLY_FILTER.OPERATOR]
+
+            self.register_buffer("early_filter_x", torch.Tensor(early_filter_weights["x"]))
+            self.register_buffer("early_filter_y", torch.Tensor(early_filter_weights["y"]))
+            self.register_buffer("early_filter_scale", torch.Tensor([early_filter_scale]))
+
         self.backbone = build_backbone(cfg)
         self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
         self.mask_head = build_dynamic_mask_head(cfg)
@@ -119,7 +144,11 @@ class CondInst(nn.Module):
         images_norm = [self.normalizer(x) for x in original_images]
         images_norm = ImageList.from_tensors(images_norm, self.backbone.size_divisibility)
 
-        features = self.backbone(images_norm.tensor)
+        input_tensor = images_norm.tensor
+        if self._apply_early_filter:
+            input_tensor = torch.cat((input_tensor, self._early_filter(input_tensor)), dim=1)
+
+        features = self.backbone(input_tensor)
 
         if "instances" in batched_inputs[0]:
             gt_instances = [x["instances"].to(self.device) for x in batched_inputs]
@@ -183,6 +212,24 @@ class CondInst(nn.Module):
                 })
 
             return processed_results
+
+
+    def _early_filter(self, image):
+        in_channels = image.size(1)
+        out_channels = in_channels
+
+        with torch.no_grad():
+            filter_x = self.early_filter_x[None, None]
+            filter_x = filter_x.expand(out_channels, 1, -1, -1)
+            filter_y = self.early_filter_y[None, None]
+            filter_y = filter_y.expand(out_channels, 1, -1, -1)
+
+            Gx = F.conv2d(image, filter_x, bias=None, padding=1, groups=in_channels)
+            Gy = F.conv2d(image, filter_y, bias=None, padding=1, groups=in_channels)
+            G = torch.sqrt(Gx**2 + Gy**2) * self.early_filter_scale[0]
+
+        return G
+    
 
     def _forward_mask_heads_train(self, proposals, mask_feats, gt_instances):
         # prepare the inputs for mask heads

@@ -30,7 +30,7 @@ class VisualizationDemo(object):
         )
         self.cfg = cfg
         self.cpu_device = torch.device("cpu")
-        self._is_stack = cfg.DATALOADER.IS_STACK
+        self._is_stack = cfg.INPUT.IS_STACK
         self.instance_mode = instance_mode
         self.vis_text = cfg.MODEL.ROI_HEADS.NAME == "TextHead"
 
@@ -40,7 +40,7 @@ class VisualizationDemo(object):
             self.predictor = AsyncPredictor(cfg, num_gpus=num_gpu)  #Not modified yet for stack
         else:
             self.predictor = DefaultPredictor(cfg)
-        self._filter_duplicates = cfg.OUTPUT.FILTER_DUPLICATES
+        self._gather_stack_results = cfg.OUTPUT.GATHER_STACK_RESULTS
 
     def run_on_image(self, image):
         """
@@ -93,7 +93,7 @@ class VisualizationDemo(object):
         vis_output = [None] * stack_size
         if self._is_stack:
             predictions = self.predictor(stack)
-            if self._filter_duplicates:
+            if self._gather_stack_results:
                 predictions = [predictions for z in range(stack_size)]
         else:
             predictions = [None] * stack_size

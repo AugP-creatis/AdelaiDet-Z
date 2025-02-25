@@ -3,7 +3,7 @@ MODEL:
   BACKBONE:
     DIM: 2
   RESNETS:
-    DEPTH: 18
+    DEPTH: 11
     NORM: "BN2d"
   SEPARATOR:
     NAME: "SharedConvSeparator"

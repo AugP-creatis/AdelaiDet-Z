@@ -1,7 +1,7 @@
 _BASE_: "Base-CondInstZ.yaml"
 MODEL:
   BACKBONE:
-    IMAGE_DIM: 3
+    DIM: 3
   RESNETS:
     DEPTH: 18
     NORM: "BN3d"

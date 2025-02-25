@@ -3,6 +3,7 @@ import logging
 
 import torch
 from torchvision.ops import nms
+import torch.nn.functional as F
 
 from detectron2.structures import ImageList
 from detectron2.modeling.backbone import build_backbone
@@ -27,16 +28,38 @@ class CondInst_Z(CondInst):
     def __init__(self, cfg):
         super().__init__(cfg)
 
-        self._image_dim = cfg.MODEL.BACKBONE.IMAGE_DIM
-        if self._image_dim == 2:
-            input_shape = ShapeSpec(channels = cfg.INPUT.STACK_SIZE * len(cfg.MODEL.PIXEL_MEAN))
-        elif self._image_dim == 3:
-            input_shape = ShapeSpec(stack_size=cfg.INPUT.STACK_SIZE, channels=len(cfg.MODEL.PIXEL_MEAN))
-        
-        self.backbone = build_backbone(cfg, input_shape)
+        self._apply_early_filter = cfg.MODEL.EARLY_FILTER.ENABLED
+        if self._apply_early_filter:
+            early_filter_weights = {
+                "Sobel": {
+                    "x": [
+                        [-1,0,1],
+                        [-2,0,2],
+                        [-1,0,1]
+                    ],
+                    "y": [
+                        [-1,-2,-1],
+                        [ 0, 0, 0],
+                        [ 1, 2, 1]
+                    ]
+                }
+            }[cfg.MODEL.EARLY_FILTER.OPERATOR]
+
+            early_filter_scale = {
+                "Sobel": 1/8
+            }[cfg.MODEL.EARLY_FILTER.OPERATOR]
+
+            self.register_buffer("early_filter_x", torch.Tensor(early_filter_weights["x"]))
+            self.register_buffer("early_filter_y", torch.Tensor(early_filter_weights["y"]))
+            self.register_buffer("early_filter_scale", torch.Tensor([early_filter_scale]))
+
         self.separator = build_separator(cfg, self.backbone.output_shape())
+        self._channel_dims = cfg.MODEL.BACKBONE.DIM
         self._stack_size = cfg.INPUT.STACK_SIZE
         self._filter_duplicates = cfg.OUTPUT.FILTER_DUPLICATES
+        self._gather_stack_results = cfg.OUTPUT.GATHER_STACK_RESULTS
+        if self._gather_stack_results:
+            assert self._filter_duplicates, "OUTPUT.FILTER_DUPLICATES should be True if OUTPUT.GATHER_STACK_RESULTS is True"
 
     def forward(self, batched_inputs):
         nb_stacks = len(batched_inputs)
@@ -47,14 +70,18 @@ class CondInst_Z(CondInst):
         # normalize images
         stacks_norm = [None] * nb_stacks
         for s in range(nb_stacks):
-            stacks_norm[s] = torch.stack([self.normalizer(x) for x in original_stacks[s]], dim = 1)
+            stacks_norm[s] = torch.stack([self.normalizer(x) for x in original_stacks[s]], dim=1)
         stacks_norm = ImageList.from_tensors(stacks_norm, self.backbone.size_divisibility)
 
-        if self._image_dim == 2:
+        if self._channel_dims == 2:
             tensor_size = stacks_norm.tensor.shape
             input_tensor = stacks_norm.tensor.view(tensor_size[0], -1, tensor_size[-2], tensor_size[-1])    #Concat
-        elif self._image_dim == 3:
+        elif self._channel_dims == 3:
             input_tensor = stacks_norm.tensor
+        
+        if self._apply_early_filter:
+            input_tensor = torch.cat((input_tensor, self._early_filter(input_tensor)), dim=1)
+            
         features = self.backbone(input_tensor)
 
         if "instances" in batched_inputs[0][0]:
@@ -135,13 +162,14 @@ class CondInst_Z(CondInst):
 
             padded_im_h, padded_im_w = stacks_norm.tensor.size()[-2:]
 
-            if self._filter_duplicates:
+            if self._gather_stack_results:
                 processed_results = [None] * nb_stacks
             else:
                 processed_results = [[None] * self._stack_size for s in range(nb_stacks)]
             
             for stack_id, (input_per_stack, image_size) in enumerate(zip(batched_inputs, stacks_norm.image_sizes)):
-                stack_instances_list = []
+                nonempty_instances = []
+                empty_instances = None
                 for z in range(self._stack_size):
                     height = input_per_stack[z].get("height", image_size[0])
                     width = input_per_stack[z].get("width", image_size[1])
@@ -154,19 +182,59 @@ class CondInst_Z(CondInst):
 
                     if self._filter_duplicates:
                         if instances_per_im.has("pred_masks"):
-                            stack_instances_list.append(instances_per_im)
+                            instances_per_im.z_inds = z * instances_per_im.locations.new_ones(len(instances_per_im), dtype=torch.long)  #inspired by _forward_mask_heads_test
+                            nonempty_instances.append(instances_per_im)
+                        elif empty_instances is None:
+                            empty_instances = instances_per_im
                     else:
                         processed_results[stack_id][z] = {"instances": instances_per_im}
 
                 if self._filter_duplicates:
-                    if len(stack_instances_list) == 0:
-                        stack_instances_list.append(instances_per_im)
-                    stack_instances = Instances.cat(stack_instances_list)
-                    keep = nms(
-                        stack_instances.pred_boxes.tensor,
-                        stack_instances.scores,
-                        0.9
-                    )   # BoxMode has to be XYXY_ABS, which is the case (see dataset_mapper.py)
-                    processed_results[stack_id] = {"instances": stack_instances[keep]}
+                    kept_instances = None
+                    if len(nonempty_instances) > 0:
+                        instances_per_stack = Instances.cat(nonempty_instances)
+                        keep = nms(
+                            instances_per_stack.pred_boxes.tensor,
+                            instances_per_stack.scores,
+                            0.9
+                        )   # BoxMode has to be XYXY_ABS, which is the case (see dataset_mapper.py)
+                        kept_instances = instances_per_stack[keep]
+
+                    if self._gather_stack_results:
+                        if kept_instances is None:
+                            kept_instances = empty_instances
+                        processed_results[stack_id] = {"instances": kept_instances}
+                    else:
+                        for z in range(self._stack_size):
+                            if kept_instances is not None and z in kept_instances.z_inds:
+                                processed_results[stack_id][z] = {"instances": kept_instances[kept_instances.z_inds == z]}
+                            else:
+                                processed_results[stack_id][z] = {"instances": empty_instances}
 
             return processed_results
+        
+    def _early_filter(self, image):
+        in_channels = image.size(1)
+        out_channels = in_channels
+
+        with torch.no_grad():
+            
+            if self._channel_dims == 2:
+                filter_x = self.early_filter_x[None, None]
+                filter_x = filter_x.expand(out_channels, 1, -1, -1)
+                filter_y = self.early_filter_y[None, None]
+                filter_y = filter_y.expand(out_channels, 1, -1, -1)
+                Gx = F.conv2d(image, filter_x, bias=None, padding=1, groups=in_channels)
+                Gy = F.conv2d(image, filter_y, bias=None, padding=1, groups=in_channels)
+
+            elif self._channel_dims == 3:
+                filter_x = self.early_filter_x[None, None, None]
+                filter_x = filter_x.expand(out_channels, 1, 1, -1, -1)
+                filter_y = self.early_filter_y[None, None, None]
+                filter_y = filter_y.expand(out_channels, 1, 1, -1, -1)
+                Gx = F.conv3d(image, filter_x, bias=None, padding=(0, 1, 1), groups=in_channels)
+                Gy = F.conv3d(image, filter_y, bias=None, padding=(0, 1, 1), groups=in_channels)
+
+            G = torch.sqrt(Gx**2 + Gy**2) * self.early_filter_scale[0]
+
+        return G

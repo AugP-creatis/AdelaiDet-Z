@@ -232,25 +232,27 @@ def setup(args):
     #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
     #cfg.MODEL.MOBILENET = False
     #cfg.MODEL.RESNETS.DEPTH = 18
-    cfg.MODEL.RESNETS.STEM_OUT_CHANNELS = 32
-    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {11:16, 18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
+    cfg.MODEL.RESNETS.STEM_OUT_CHANNELS = 16
+    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {11:8, 18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
     cfg.MODEL.FCOS.SIZES_OF_INTEREST = [32, 64, 128, 256] if cfg.MODEL.RESNETS.DEPTH == 11 else [64, 128, 256, 512]
     #cfg.MODEL.RESNETS.NORM = "BN3d"
     #cfg.MODEL.RESNETS.RES5_DILATION = 1
     #cfg.MODEL.RESNETS.STRIDE_IN_1X1 = True
-    cfg.MODEL.FPN.OUT_CHANNELS = 64
+    cfg.MODEL.FPN.OUT_CHANNELS = 32
     #cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
     
     cfg.MODEL.FCOS.NUM_CLS_CONVS = 1
     cfg.MODEL.FCOS.NUM_BOX_CONVS = 1
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
     #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
+    cfg.MODEL.FCOS.NMS_TH = 0.8
 
     cfg.MODEL.CONDINST.MASK_BRANCH.NUM_CONVS = 1
-    cfg.MODEL.CONDINST.MASK_BRANCH.CHANNELS = 32
+    cfg.MODEL.CONDINST.MASK_BRANCH.CHANNELS = 16
     cfg.MODEL.CONDINST.MASK_BRANCH.OUT_CHANNELS = 8
     cfg.MODEL.CONDINST.MASK_HEAD.NUM_LAYERS = 2
     cfg.MODEL.CONDINST.MASK_HEAD.CHANNELS = 4
+    cfg.MODEL.CONDINST.MASK_NMS_TH = 0.5
 
     #cfg.MODEL.PIXEL_MEAN = [87.779, 100.134, 101.969]   #In BGR order
     #cfg.MODEL.PIXEL_STD = [16.368, 13.607, 13.170]  #In BGR order
@@ -264,11 +266,11 @@ def setup(args):
 
     # SOLVER
     cfg.SOLVER.IMS_PER_BATCH = 4
-    cfg.SOLVER.MAX_ITER = 30000
+    cfg.SOLVER.MAX_ITER = 40000
     cfg.SOLVER.CHECKPOINT_PERIOD = 1000
     cfg.SOLVER.BASE_LR = 0.01
     cfg.SOLVER.WARMUP_ITERS = 2000
-    cfg.SOLVER.STEPS = (15000,25000)
+    cfg.SOLVER.STEPS = (20000,32000)
     cfg.SOLVER.WEIGHT_DECAY = 0.001
     cfg.SOLVER.WEIGHT_DECAY_BIAS = cfg.SOLVER.WEIGHT_DECAY
     cfg.SOLVER.MOMENTUM = 0.5
@@ -320,14 +322,16 @@ def get_dicts(dir, mode, idx_cross_val, classes):
     random.seed(0)
     if mode == 'train':
         cross_val_dict = {0: [2,3,4], 1: [0,3,4], 2: [0,1,4], 3: [0,1,2], 4: [1,2,3]}
+        #cross_val_dict = {0: [1,2,3,4], 1: [0,2,3,4], 2: [0,1,3,4], 3: [0,1,2,4], 4: [0,1,2,3]}
         folds_list = cross_val_dict[idx_cross_val]
     elif mode == 'test':
         cross_val_dict = {0:[0], 1:[1], 2:[2], 3:[3], 4:[4]}
         folds_list = cross_val_dict[idx_cross_val]
+    
     elif mode == 'val' :
         cross_val_dict = {0:[1], 1:[2], 2:[3], 3:[4], 4:[0]}
         folds_list = cross_val_dict[idx_cross_val]
-
+    
     dataset_dicts = []
     dict_instance_label = {value:num for num, value in enumerate(classes.values())}
     for fold in folds_list:

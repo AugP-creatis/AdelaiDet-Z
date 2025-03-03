@@ -12,7 +12,8 @@ from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
 from detectron2.layers import ShapeSpec
 from detectron2.structures.instances import Instances
 
-from adet.modeling.condinst import CondInst
+from .condinst import CondInst
+from .utils import mask_nms
 
 __all__ = ["CondInst_Z"]
 
@@ -56,6 +57,7 @@ class CondInst_Z(CondInst):
         self.separator = build_separator(cfg, self.backbone.output_shape())
         self._channel_dims = cfg.MODEL.BACKBONE.DIM
         self._stack_size = cfg.INPUT.STACK_SIZE
+        self._mask_nms_threshold = cfg.MODEL.CONDINST.MASK_NMS_TH
         self._filter_duplicates = cfg.OUTPUT.FILTER_DUPLICATES
         self._gather_stack_results = cfg.OUTPUT.GATHER_STACK_RESULTS
         if self._gather_stack_results:
@@ -179,6 +181,14 @@ class CondInst_Z(CondInst):
                         instances_per_im, height, width,
                         padded_im_h, padded_im_w
                     )
+
+                    if self._mask_nms_threshold != -1 and instances_per_im.has("pred_masks"):
+                        keep = mask_nms(
+                            instances_per_im.pred_masks,
+                            instances_per_im.scores,
+                            self._mask_nms_threshold
+                        )
+                        instances_per_im = instances_per_im[keep]
 
                     if self._filter_duplicates:
                         if instances_per_im.has("pred_masks"):

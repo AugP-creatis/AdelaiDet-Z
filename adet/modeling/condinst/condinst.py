@@ -15,6 +15,7 @@ from detectron2.structures.masks import PolygonMasks, polygons_to_bitmask
 
 from .dynamic_mask_head import build_dynamic_mask_head
 from .mask_branch import build_mask_branch
+from .utils import mask_nms
 
 from adet.utils.comm import aligned_bilinear
 
@@ -114,6 +115,7 @@ class CondInst(nn.Module):
 
         self.max_proposals = cfg.MODEL.CONDINST.MAX_PROPOSALS
         self.topk_proposals_per_im = cfg.MODEL.CONDINST.TOPK_PROPOSALS_PER_IM
+        self._mask_nms_threshold = cfg.MODEL.CONDINST.MASK_NMS_TH
 
         # boxinst configs
         self.boxinst_enabled = cfg.MODEL.BOXINST.ENABLED
@@ -206,6 +208,14 @@ class CondInst(nn.Module):
                     instances_per_im, height, width,
                     padded_im_h, padded_im_w
                 )
+                
+                if self._mask_nms_threshold != -1 and instances_per_im.has("pred_masks"):
+                    keep = mask_nms(
+                        instances_per_im.pred_masks,
+                        instances_per_im.scores,
+                        self._mask_nms_threshold
+                    )
+                    instances_per_im = instances_per_im[keep]
 
                 processed_results.append({
                     "instances": instances_per_im

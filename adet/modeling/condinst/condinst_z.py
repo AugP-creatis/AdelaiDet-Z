@@ -57,7 +57,6 @@ class CondInst_Z(CondInst):
         self.separator = build_separator(cfg, self.backbone.output_shape())
         self._channel_dims = cfg.MODEL.BACKBONE.DIM
         self._stack_size = cfg.INPUT.STACK_SIZE
-        self._mask_nms_threshold = cfg.MODEL.CONDINST.MASK_NMS_TH
         self._filter_duplicates = cfg.OUTPUT.FILTER_DUPLICATES
         self._gather_stack_results = cfg.OUTPUT.GATHER_STACK_RESULTS
         if self._gather_stack_results:

@@ -75,8 +75,8 @@ class CondInst_Z(CondInst):
         stacks_norm = ImageList.from_tensors(stacks_norm, self.backbone.size_divisibility)
 
         if self._channel_dims == 2:
-            tensor_size = stacks_norm.tensor.shape
-            input_tensor = stacks_norm.tensor.view(tensor_size[0], -1, tensor_size[-2], tensor_size[-1])    #Concat
+            tensor_shape = stacks_norm.tensor.shape
+            input_tensor = stacks_norm.tensor.view(tensor_shape[0], -1, tensor_shape[-2], tensor_shape[-1])    #Concat
         elif self._channel_dims == 3:
             input_tensor = stacks_norm.tensor
         

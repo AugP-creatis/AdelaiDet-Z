@@ -1,0 +1,14 @@
+_BASE_: "../configs/CondInst/CondInstZ/CondInstZ_R_11_3d.yaml"
+INPUT:
+  STACK_SIZE: 11
+  EXTENSION: "_ch00.tif"
+  SLICE_SEPARATOR: "z"
+  EXCLUDED_PATH_SUBSTRINGS: ("MetaData", "hyperstack", "utilisable", "non_utilisable")
+MODEL:
+  WEIGHTS: "BF2i/CondInstZ_model.pth"
+  FCOS:
+    INFERENCE_TH_TEST: 0.2
+OUTPUT:
+  FILTER_DUPLICATES: True
+  IMAGE_FILE: True
+  NRRD_FILE: True

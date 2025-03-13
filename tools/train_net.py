@@ -190,16 +190,19 @@ def setup(args):
     Create configs and perform basic setups.
     """
     cfg = get_cfg()
-    cfg.merge_from_file(args.config_file)
     # Check https://github.com/AugP-creatis/detectron2-Z/blob/main/detectron2/config/defaults.py
+    # and https://github.com/AugP-creatis/AdelaiDet-Z/blob/master/adet/config/defaults.py
+
+    cfg.merge_from_file(args.config_file)
 
     # DATASETS
     cfg.DATASETS.TRAIN = ("train",)
-    cfg.DATASETS.VAL = ("val",)
+    #cfg.DATASETS.VAL = ("val",)
     cfg.DATASETS.TEST = ("test",)
 
+    # Other settings you may want to change:
+
     # STACK
-    #cfg.INPUT.IS_STACK = True
     #cfg.INPUT.STACK_SIZE = 11
     #cfg.INPUT.EXTENSION = ".png"
     #cfg.INPUT.SLICE_SEPARATOR = "F"
@@ -207,82 +210,28 @@ def setup(args):
     # INPUT
     #cfg.INPUT.FORMAT = "BGR"   # Model input format (has to be BGR for seamless inference when reading RGB images with opencv)
     #cfg.INPUT.MASK_FORMAT = "polygon"
-    #cfg.INPUT.MIN_SIZE_TRAIN = (480,)
-    #cfg.INPUT.MAX_SIZE_TRAIN = 1333
-    #cfg.INPUT.MIN_SIZE_TEST = 480
-    #cfg.INPUT.MAX_SIZE_TEST = 1333
 
-    # DATALOADER
-    #cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS = False
-    #cfg.DATALOADER.ASPECT_RATIO_GROUPING = False
     cfg.DATALOADER.NUM_WORKERS = 1  #max 2 recommended
-    
-    # MODEL
-    cfg.MODEL.WEIGHTS = ""
-    #cfg.MODEL.BACKBONE.FREEZE_AT = 0
 
+    # MODEL
+    cfg.MODEL.USE_AMP = True
     cfg.MODEL.EARLY_FILTER.ENABLED = True
     cfg.MODEL.EARLY_FILTER.OPERATOR = "Sobel"
-    
-    #cfg.MODEL.USE_AMP = True
-    #cfg.MODEL.META_ARCHITECTURE = "CondInst_Z"
-    #cfg.MODEL.BACKBONE.DIM = 3
+    #cfg.MODEL.MOBILENET = False
     cfg.MODEL.BACKBONE.INTER_SLICE = True
     #cfg.MODEL.BACKBONE.ANTI_ALIAS = False
-    #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
-    #cfg.MODEL.MOBILENET = False
-    #cfg.MODEL.RESNETS.DEPTH = 18
-    cfg.MODEL.RESNETS.STEM_OUT_CHANNELS = 16
-    cfg.MODEL.RESNETS.RES2_OUT_CHANNELS = {11:8, 18:64, 32:64, 50:256, 101:256, 152:256}[cfg.MODEL.RESNETS.DEPTH]
-    cfg.MODEL.FCOS.SIZES_OF_INTEREST = [32, 64, 128, 256] if cfg.MODEL.RESNETS.DEPTH == 11 else [64, 128, 256, 512]
-    #cfg.MODEL.RESNETS.NORM = "BN3d"
-    #cfg.MODEL.RESNETS.RES5_DILATION = 1
     #cfg.MODEL.RESNETS.STRIDE_IN_1X1 = True
-    cfg.MODEL.FPN.OUT_CHANNELS = 32
-    #cfg.MODEL.SEPARATOR.NAME = "From3dTo2d"
-    
-    cfg.MODEL.FCOS.NUM_CLS_CONVS = 1
-    cfg.MODEL.FCOS.NUM_BOX_CONVS = 1
+    #cfg.MODEL.RESNETS.RES5_DILATION = 1
+    #cfg.MODEL.RESNETS.DEFORM_INTERVAL = 1
+    #cfg.MODEL.FCOS.INFERENCE_TH_TEST = 0.05
     cfg.MODEL.FCOS.NUM_CLASSES = len(eval(args.classes_dict))  #For FCOS and CondInst
-    #cfg.MODEL.MEInst.NUM_CLASSES = len(eval(args.classes_dict)) #For MeInst
-    cfg.MODEL.FCOS.NMS_TH = 0.8
-
-    cfg.MODEL.CONDINST.MASK_BRANCH.NUM_CONVS = 1
-    cfg.MODEL.CONDINST.MASK_BRANCH.CHANNELS = 16
-    cfg.MODEL.CONDINST.MASK_BRANCH.OUT_CHANNELS = 8
-    cfg.MODEL.CONDINST.MASK_HEAD.NUM_LAYERS = 2
-    cfg.MODEL.CONDINST.MASK_HEAD.CHANNELS = 4
-    cfg.MODEL.CONDINST.MASK_NMS_TH = 0.5
-
-    #cfg.MODEL.PIXEL_MEAN = [87.779, 100.134, 101.969]   #In BGR order
-    #cfg.MODEL.PIXEL_STD = [16.368, 13.607, 13.170]  #In BGR order
 
     cfg.OUTPUT.FILTER_DUPLICATES = False
     cfg.OUTPUT.GATHER_STACK_RESULTS = False
 
-    #cfg.MODEL.MASK_ON = True # (Evaluation) To compute IoU on mask and not bounding box
-    cfg.TEST.EVAL_PERIOD = 0
-    cfg.VIS_PERIOD = 0
-
-    # SOLVER
-    cfg.SOLVER.IMS_PER_BATCH = 4
-    cfg.SOLVER.MAX_ITER = 40000
-    cfg.SOLVER.CHECKPOINT_PERIOD = 1000
-    cfg.SOLVER.BASE_LR = 0.01
-    cfg.SOLVER.WARMUP_ITERS = 2000
-    cfg.SOLVER.STEPS = (20000,32000)
-    cfg.SOLVER.WEIGHT_DECAY = 0.001
-    cfg.SOLVER.WEIGHT_DECAY_BIAS = cfg.SOLVER.WEIGHT_DECAY
-    cfg.SOLVER.MOMENTUM = 0.5
-    cfg.SOLVER.DAMPENING = cfg.SOLVER.MOMENTUM
     #cfg.SOLVER.REFERENCE_WORLD_SIZE = args.num_gpus   #GPU number, batch size per GPU is IMS_PER_BATCH // REFERENCE_WORLD_SIZE
-
-    #Remove all online augmentations
-    #cfg.INPUT.HFLIP_TRAIN = False
-    #cfg.INPUT.CROP.ENABLED = False
-    #cfg.INPUT.IS_ROTATE = False
-    #cfg.TEST.AUG.ENABLED = False
-
+    #cfg.VIS_PERIOD = 0
+    
     cfg.merge_from_list(args.opts)
     cfg.freeze()
     default_setup(cfg, args)
@@ -319,7 +268,6 @@ def get_dicts(dir, mode, idx_cross_val, classes):
                              (e.g., `BoxMode.XYWH_ABS` for absolute coordinates in the format [x0, y0, w, h]).
                 - category_id: The integer ID of the object's class.
     """
-    random.seed(0)
     if mode == 'train':
         cross_val_dict = {0: [2,3,4], 1: [0,3,4], 2: [0,1,4], 3: [0,1,2], 4: [1,2,3]}
         #cross_val_dict = {0: [1,2,3,4], 1: [0,2,3,4], 2: [0,1,3,4], 3: [0,1,2,4], 4: [0,1,2,3]}
@@ -327,11 +275,11 @@ def get_dicts(dir, mode, idx_cross_val, classes):
     elif mode == 'test':
         cross_val_dict = {0:[0], 1:[1], 2:[2], 3:[3], 4:[4]}
         folds_list = cross_val_dict[idx_cross_val]
-    
+    '''
     elif mode == 'val' :
         cross_val_dict = {0:[1], 1:[2], 2:[3], 3:[4], 4:[0]}
         folds_list = cross_val_dict[idx_cross_val]
-    
+    '''
     dataset_dicts = []
     dict_instance_label = {value:num for num, value in enumerate(classes.values())}
     for fold in folds_list:
@@ -379,13 +327,13 @@ def main(args):
     cfg = setup(args)
 
     classes = eval(args.classes_dict)
-    # Register the train, validation and test datasets.
+    # Register the train and test datasets.
     DatasetCatalog.register('train', lambda: get_dicts(args.data_dir, 'train', args.cross_val, classes))
-    DatasetCatalog.register('val', lambda: get_dicts(args.data_dir, 'val', args.cross_val, classes))
+    #DatasetCatalog.register('val', lambda: get_dicts(args.data_dir, 'val', args.cross_val, classes))
     DatasetCatalog.register('test', lambda: get_dicts(args.data_dir, 'test', args.cross_val, classes))
     # Set the metadata for the dataset.
     MetadataCatalog.get('train').set(thing_classes=list(classes.keys()))
-    MetadataCatalog.get('val').set(thing_classes=list(classes.keys()))
+    #MetadataCatalog.get('val').set(thing_classes=list(classes.keys()))
     MetadataCatalog.get('test').set(thing_classes=list(classes.keys()), evaluator_type="coco")
 
     if args.eval_only:
@@ -417,8 +365,9 @@ if __name__ == "__main__":
     parser = default_argument_parser()
 
     parser.add_argument('--data-dir', default='/home/perrier/Bacteriocytes_seg/data')
-    parser.add_argument('--classes-dict',type=str,default="{'Intact_Sharp':0, 'Broken_Sharp':2}")
-    #Classes are like "{'Intact_Sharp':0,'Intact_Blurry':1,'Broken_Sharp':2,'Broken_Blurry':3}"
+    parser.add_argument('--classes-dict',type=str,default="{'Intact_Sharp':0")
+    # Classes follows "{'Intact_Sharp':0,'Intact_Blurry':1,'Broken_Sharp':2,'Broken_Blurry':3}"
+    # Example : "{'Intact_Sharp':0, 'Broken_Sharp':2}"
     parser.add_argument('--cross-val', type=int, default=0)
 
     args = parser.parse_args()
